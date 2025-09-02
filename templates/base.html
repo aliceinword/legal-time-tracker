@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+
   <title>{% block title %}Legal Time Tracker{% endblock %}</title>
+
+  <!-- App / PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+
+  <!-- Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="theme">
@@ -39,18 +48,18 @@
 </main>
 
 <script>
-  // simple dark-mode toggle
+  // Simple dark-mode toggle
   (function(){
-    const key='lt_theme';
-    const el=document.querySelector('body.theme');
-    const saved=localStorage.getItem(key);
-    if(saved){ el.dataset.theme=saved; }
-    document.getElementById('theme-toggle')?.addEventListener('click', ()=>{
-      el.dataset.theme = el.dataset.theme==='dark' ? 'light' : 'dark';
+    const key = 'lt_theme';
+    const el = document.querySelector('body.theme');
+    const saved = localStorage.getItem(key);
+    if (saved) el.dataset.theme = saved;
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+      el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
       localStorage.setItem(key, el.dataset.theme);
     });
-    if(!saved && window.matchMedia('(prefers-color-scheme: dark)').matches){
-      el.dataset.theme='dark';
+    if (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      el.dataset.theme = 'dark';
     }
   })();
 </script>
