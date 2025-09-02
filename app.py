@@ -912,10 +912,158 @@ def create_app():
     for r in app.url_map.iter_rules():
         print(f"  {r.endpoint:20} -> {r.rule}")
     print()
+# --- PWA Routes (add these to your existing app.py) ---
+    @app.route('/manifest.json')
+    def manifest():
+        """Serve PWA manifest."""
+        return app.send_static_file('manifest.json')
+    
+    @app.route('/sw.js')
+    def service_worker():
+        """Serve service worker."""
+        return app.send_static_file('sw.js')
 
+    # --- Mobile API Routes ---
+    @app.route('/api/quick-entry', methods=['POST'])
+    @login_required
+    def api_quick_entry():
+        """Quick entry API for mobile - minimal data required."""
+        data = request.get_json() or {}
+        
+        client = data.get('client', '').strip() or "(Unspecified)"
+        matter = data.get('matter', '').strip() or "(Unspecified)" 
+        hours = float(data.get('hours', 0))
+        desc = data.get('desc', '').strip()
+        
+        with Session(engine) as s:
+            us = get_settings(current_user.id, s)
+            if us.auto_expand == 1:
+                desc = replace_abbreviations(desc)
+                
+            s.add(Entry(
+                user_id=current_user.id,
+                client=client,
+                matter=matter,
+                date_of_work=date.today(),
+                hours=hours,
+                timekeeper=current_user.name,
+                desc=desc
+            ))
+            s.commit()
+            
+        return jsonify({'success': True, 'message': 'Entry saved'})
+
+    @app.route('/api/today-summary', methods=['GET'])
+    @login_required
+    def api_today_summary():
+        """Get today's time summary for mobile dashboard."""
+        with Session(engine) as s:
+            today_entries = s.scalars(
+                select(Entry).where(
+                    Entry.user_id == current_user.id,
+                    Entry.date_of_work == date.today()
+                )
+            ).all()
+            
+            total_today = sum(e.hours or 0 for e in today_entries)
+            
+            # Week summary
+            week_start = date.today() - timedelta(days=date.today().weekday())
+            week_entries = s.scalars(
+                select(Entry).where(
+                    Entry.user_id == current_user.id,
+                    Entry.date_of_work >= week_start
+                )
+            ).all()
+            
+            total_week = sum(e.hours or 0 for e in week_entries)
+            
+        return jsonify({
+            'today': {
+                'hours': round(total_today, 2),
+                'entries': len(today_entries)
+            },
+            'week': {
+                'hours': round(total_week, 2),
+                'entries': len(week_entries)
+            }
+        })
+
+    @app.route('/api/recent-clients', methods=['GET'])
+    @login_required  
+    def api_recent_clients():
+        """Get recently used clients for mobile autocomplete."""
+        with Session(engine) as s:
+            recent = s.execute(
+                select(Entry.client, func.max(Entry.date_of_work))
+                .where(Entry.user_id == current_user.id)
+                .group_by(Entry.client)
+                .order_by(func.max(Entry.date_of_work).desc())
+                .limit(10)
+            ).all()
+            
+        return jsonify([row[0] for row in recent if row[0]])
+
+    # --- Timer Routes ---
+    @app.route('/timer')
+    @login_required
+    def timer_page():
+        """Dedicated timer page for mobile users."""
+        with Session(engine) as s:
+            ensure_default_lists(current_user, s)
+            us = get_settings(current_user.id, s)
+            us.clients = [c.name for c in s.scalars(select(ClientName).where(ClientName.user_id == current_user.id).order_by(ClientName.name))]
+            us.matters = [m.name for m in s.scalars(select(MatterName).where(MatterName.user_id == current_user.id).order_by(MatterName.name))]
+            
+        return render_template('timer.html', settings=us, date_today=date.today())
+
+    # --- Dashboard Route ---
+    @app.route('/dashboard')
+    @login_required
+    def dashboard():
+        """Mobile-friendly dashboard with key metrics."""
+        with Session(engine) as s:
+            # Today's entries
+            today_entries = s.scalars(
+                select(Entry).where(
+                    Entry.user_id == current_user.id,
+                    Entry.date_of_work == date.today()
+                )
+            ).all()
+            
+            # This week's entries
+            week_start = date.today() - timedelta(days=date.today().weekday())
+            week_entries = s.scalars(
+                select(Entry).where(
+                    Entry.user_id == current_user.id,
+                    Entry.date_of_work >= week_start
+                )
+            ).all()
+            
+            # Top clients this month
+            month_start = date.today().replace(day=1)
+            client_hours = s.execute(
+                select(Entry.client, func.sum(Entry.hours))
+                .where(
+                    Entry.user_id == current_user.id,
+                    Entry.date_of_work >= month_start
+                )
+                .group_by(Entry.client)
+                .order_by(func.sum(Entry.hours).desc())
+                .limit(5)
+            ).all()
+            
+        return render_template('dashboard.html', 
+            today_entries=today_entries,
+            week_entries=week_entries,
+            client_hours=client_hours,
+            today_total=sum(e.hours or 0 for e in today_entries),
+            week_total=sum(e.hours or 0 for e in week_entries)
+        )
     return app
 
 
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
+
