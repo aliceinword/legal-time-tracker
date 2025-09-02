@@ -1,14 +1,17 @@
-﻿Flask>=3.1,<4
+Flask>=3.1,<4
 Flask-Login>=0.6,<1
 SQLAlchemy>=2.0,<3
 python-dotenv>=1.0,<2
 Werkzeug>=3.0,<4
 openpyxl>=3.1,<4
-p s y c o p g 2 - b i n a r y > = 2 . 9 , < 3 
- 
- g u n i c o r n > = 2 1 . 0 , < 2 2 
 Flask-WTF>=1.1,<2        # CSRF protection
 Flask-Limiter>=3.5,<4    # Rate limiting
 Flask-Talisman>=1.1,<2   # Security headers
- 
- 
+Flask>=3.1,<4
+Flask-Login>=0.6,<1
+SQLAlchemy>=2.0,<3
+python-dotenv>=1.0,<2
+Werkzeug>=3.0,<4
+openpyxl>=3.1,<4
+gunicorn>=21.0,<22
+psycopg2-binary>=2.9,<3
