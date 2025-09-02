@@ -11,7 +11,25 @@
   <meta name="theme-color" content="#007bff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+  
+  <!-- Mobile CSS -->
+<link rel="stylesheet"
+<!-- Mobile CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}">
 
+<!-- Offline JavaScript -->
+<script src="{{ url_for('static', filename='offline.js') }}"></script>
+
+<!-- PWA Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+ window.addEventListener('load', () => {
+   navigator.serviceWorker.register('/sw.js')
+     .then(reg => console.log('SW registered'))
+     .catch(err => console.log('SW registration failed'));
+ });
+}
+</script>
   <!-- Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
