@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Create account · Legal Time Tracker{% endblock %}
+
+{% block content %}
+<main class="auth-page">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <div class="flash" style="margin-bottom:16px">
+        {% for cat, m in msgs %}<div class="flash-item {{ cat }}">{{ m }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="card auth-card">
+    <header class="auth-header">
+      <h1>Create account</h1>
+      <p class="sub">Use your real name (for timekeeper) and a valid email.</p>
+    </header>
+
+    <form action="{{ url_for('register') }}" method="post" class="auth-form" novalidate>
+      <label>Your Name
+        <input type="text" name="name" autocomplete="name" required>
+      </label>
+
+      <label>Email
+        <input type="email" name="email" autocomplete="email" required>
+      </label>
+
+      <label>Password
+        <input type="password" name="password" minlength="6" required>
+      </label>
+
+      <label>Confirm Password
+        <input type="password" name="password2" minlength="6" required>
+      </label>
+
+      <button class="btn primary wide" type="submit">Create account</button>
+      <div class="row" style="margin-top:8px">
+        <a class="btn link" href="{{ url_for('login') }}">Back to sign in</a>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock %}

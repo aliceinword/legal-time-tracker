@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Entries · Legal Time Tracker{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<form method="get" action="{{ url_for('entries') }}" class="card" id="filters-form">
+  <!-- Quick ranges -->
+  <div class="row gap" style="margin-bottom:10px">
+    <strong>Date range:</strong>
+    <a class="btn small {% if mode=='7d' %}primary{% endif %}"
+       href="{{ url_for('entries', mode='7d', q=q) }}">Last 7d</a>
+    <a class="btn small {% if mode=='30d' %}primary{% endif %}"
+       href="{{ url_for('entries', mode='30d', q=q) }}">Last 30d</a>
+    <a class="btn small {% if mode=='90d' %}primary{% endif %}"
+       href="{{ url_for('entries', mode='90d', q=q) }}">Last 90d</a>
+    <a class="btn small {% if mode=='all' %}primary{% endif %}"
+       href="{{ url_for('entries', mode='all', q=q) }}">All</a>
+    <span class="muted">…or set a custom range below.</span>
+  </div>
+
+  <input type="hidden" name="mode" id="mode" value="{{ mode or '30d' }}">
+
+  <div class="grid four">
+    <label>Search
+      <input type="text" name="q" value="{{ q or '' }}" placeholder="client, matter, desc">
+    </label>
+    <label>From
+      <input type="date" name="from" id="from" value="{{ dfrom or '' }}">
+    </label>
+    <label>To
+      <input type="date" name="to" id="to" value="{{ dto or '' }}">
+    </label>
+
+    <div class="row gap align-end">
+      <button class="btn" type="submit">Apply</button>
+      <a class="btn" href="{{ url_for('entries') }}">Clear</a>
+
+      <!-- Export by filters (all matching rows) -->
+      <a class="btn"
+         href="{{ url_for('export_entries') }}?mode={{ mode|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+        Export CSV
+      </a>
+      <a class="btn"
+         href="{{ url_for('export_xlsx') }}?mode={{ mode|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+        Export XLSX
+      </a>
+    </div>
+  </div>
+</form>
+
+<!-- Totals + per-client chips -->
+<div class="card row space-between">
+  <div><strong>Total hours:</strong> {{ "%.2f"|format(total_hours or 0) }}</div>
+  <div class="muted">
+    {% for client, hrs in by_client %}
+      <span class="chip">{{ client }}: {{ "%.2f"|format(hrs or 0) }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Batch delete + table + inline edit -->
+<form action="{{ url_for('entries_delete') }}" method="post" class="card" id="bulk-form">
+  <div class="row space-between" style="margin-bottom:10px">
+    <div class="muted">Select rows and use bulk actions.</div>
+    <div class="row gap">
+      <!-- Export only the checked rows (submits the checkboxes in THIS form) -->
+      <button class="btn small" type="submit"
+              formaction="{{ url_for('export_entries') }}"
+              formmethod="post"
+              name="export_selected" value="1">
+        Export Selected (CSV)
+      </button>
+      <button class="btn small" type="submit"
+              formaction="{{ url_for('export_xlsx') }}"
+              formmethod="post"
+              name="export_selected" value="1">
+        Export Selected (XLSX)
+      </button>
+
+      <!-- Only this one asks for confirmation -->
+      <button class="btn danger small" type="submit" data-confirm="delete">Delete Selected</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table" id="entries-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="check-all" aria-label="Select all"></th>
+          <th>Client</th>
+          <th>Matter</th>
+          <th>Date of Work</th>
+          <th>Timekeeper</th>
+          <th>Billable Hours</th>
+          <th>Description</th>
+          <th class="actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in rows %}
+        <tr>
+          <td data-label="Sel"><input type="checkbox" name="id" value="{{ e.id }}" class="row-check"></td>
+          <td data-label="Client">{{ e.client }}</td>
+          <td data-label="Matter">{{ e.matter }}</td>
+          <td data-label="Date of Work">{{ e.date_of_work }}</td>
+          <td data-label="Timekeeper">{{ e.timekeeper or current_user.name }}</td>
+          <td data-label="Billable Hours">{{ '%.2f'|format(e.hours or 0) }}</td>
+          <td data-label="Description" class="desc">{{ e.desc }}</td>
+          <td data-label="Actions" class="actions">
+            <button class="btn small js-edit" data-id="{{ e.id }}" type="button">Edit</button>
+
+            <!-- Per-row delete (separate form is OK here) -->
+            <form action="{{ url_for('entries_delete') }}" method="post" class="inline"
+                  onsubmit="return confirm('Delete this entry?');">
+              <input type="hidden" name="id" value="{{ e.id }}">
+              <button class="btn danger small" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+
+        <!-- Inline editor row (hidden; toggled by JS) -->
+        <tr class="edit-row" id="edit-{{ e.id }}" style="display:none">
+          <td></td>
+          <td colspan="7">
+            <form action="{{ url_for('entries_edit') }}" method="post" class="row gap" onsubmit="return saveRow(this)">
+              <input type="hidden" name="id" value="{{ e.id }}">
+              <label style="min-width:160px">Client
+                <input name="client" value="{{ e.client }}">
+              </label>
+              <label style="min-width:160px">Matter
+                <input name="matter" value="{{ e.matter }}">
+              </label>
+              <label style="min-width:160px">Date
+                <input type="date" name="date_of_work" value="{{ e.date_of_work.isoformat() if e.date_of_work else '' }}">
+              </label>
+              <label style="min-width:140px">Timekeeper
+                <input name="timekeeper" value="{{ e.timekeeper or current_user.name }}">
+              </label>
+              <label style="min-width:120px">Hours
+                <input type="number" step="0.1" name="hours" value="{{ e.hours or 0 }}">
+              </label>
+              <label class="w100">Description
+                <input name="desc" value="{{ e.desc }}">
+              </label>
+              <button class="btn small primary" type="submit">Save</button>
+              <button class="btn small js-cancel" type="button" data-id="{{ e.id }}">Cancel</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">No entries match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+
+<!-- Small JS helpers -->
+<script>
+  // If From/To are touched, force mode='range'
+  (function(){
+    const mode = document.getElementById('mode');
+    const from = document.getElementById('from');
+    const to   = document.getElementById('to');
+    if (from) from.addEventListener('input', () => { if(mode) mode.value = 'range'; });
+    if (to)   to.addEventListener('input',   () => { if(mode) mode.value = 'range'; });
+  })();
+
+  // Select all checkboxes
+  (function(){
+    const all = document.getElementById('check-all');
+    if(!all) return;
+    const rows = () => Array.from(document.querySelectorAll('.row-check'));
+    all.addEventListener('change', () => rows().forEach(cb => cb.checked = all.checked));
+  })();
+
+  // Inline edit toggling
+  (function(){
+    function showRow(id, show){
+      const r = document.getElementById('edit-'+id);
+      if(!r) return;
+      r.style.display = show ? '' : 'none';
+    }
+    document.querySelectorAll('.js-edit').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.preventDefault();
+        showRow(btn.dataset.id, true);
+      });
+    });
+    document.querySelectorAll('.js-cancel').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        showRow(btn.dataset.id, false);
+      });
+    });
+    window.saveRow = function(form){ return true; };
+  })();
+
+  // Confirm only when clicking "Delete Selected"
+  (function(){
+    const bulk = document.getElementById('bulk-form');
+    if(!bulk) return;
+    bulk.addEventListener('submit', function(e){
+      const btn = e.submitter; // modern browsers
+      if (btn && btn.dataset && btn.dataset.confirm === 'delete') {
+        if (!confirm('Delete selected entries?')) {
+          e.preventDefault();
+        }
+      }
+    });
+  })();
+</script>
+
+{% endblock %}

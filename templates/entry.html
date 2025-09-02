@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}New Entry · Legal Time Tracker{% endblock %}
+
+{% block content %}
+<main class="container narrow">
+
+  <!-- Page-scoped tweaks -->
+  <style>
+    /* Smaller Hours field; larger Description */
+    .hours-input { width: 110px; }
+    textarea[name="desc"] { min-height: 140px; width: 100%; resize: vertical; }
+    @media (max-width: 640px) { .hours-input { width: 90px; } }
+  </style>
+
+  <!-- Stopwatch Card -->
+  <div class="card soft" id="stopwatch-card" aria-label="Stopwatch" data-stop-min="{{ stop_min|default(300) }}">
+    <div class="row space-between" style="margin-bottom:8px">
+      <div>
+        <h2 style="margin:0 0 6px 0">Stopwatch</h2>
+        <div class="muted">
+          Use Start / Pause / Stop to track work. On Stop, sessions ≥ {{ (stop_min // 60) if stop_min else 5 }} min
+          prompt for a description and get logged automatically.
+        </div>
+      </div>
+      <button class="btn small" type="button" id="sw-help">How it works</button>
+    </div>
+
+    <div class="row" style="gap:16px;align-items:center">
+      <div id="sw-display" class="stopwatch-display" aria-live="polite">00:00:00</div>
+      <div class="row" style="gap:8px">
+        <button class="btn primary" type="button" id="sw-start">Start</button>
+        <button class="btn" type="button" id="sw-pause">Pause</button>
+        <button class="btn danger" type="button" id="sw-stop">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invisible form we submit when a stopwatch session is saved -->
+  <form id="sw-form" action="{{ url_for('save_entry') }}" method="post" style="display:none">
+    <input type="hidden" name="client" id="sw-client">
+    <input type="hidden" name="matter" id="sw-matter">
+    <input type="hidden" name="date_of_work" id="sw-date">
+    <input type="hidden" name="hours" id="sw-hours">
+    <input type="hidden" name="desc" id="sw-desc">
+    <input type="hidden" name="elapsed_seconds" id="sw-elapsed">
+    <!-- <input type="hidden" name="close" value="1"> -->
+  </form>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <div class="flash">
+        {% for cat, m in msgs %}<div class="flash-item {{ cat }}">{{ m }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <form method="post" action="{{ url_for('entry') }}" class="card" id="entry-form" novalidate>
+    <h1>New Time Entry</h1>
+
+    <div class="grid two">
+
+      {% set has_clients = settings and settings.clients and settings.clients|length > 0 %}
+      <label>Client
+        <select name="client_select" id="client_select" {% if not has_clients %}hidden{% endif %} {% if has_clients %}required{% endif %}>
+          <option value="">— choose —</option>
+          {% if has_clients %}
+            {% for c in settings.clients %}
+              <option value="{{ c }}" {% if request.form.get('client') == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+            <option value="__other__" {% if request.form.get('client') and (request.form.get('client') not in settings.clients) %}selected{% endif %}>Other (type new…)</option>
+          {% endif %}
+        </select>
+        <input
+          name="client"
+          id="client_input"
+          value="{{ request.form.get('client','') }}"
+          {% if has_clients and (not request.form.get('client') or (request.form.get('client') in settings.clients)) %}hidden{% endif %}
+          {% if not has_clients %}required{% endif %}
+          placeholder="Type new client"
+        >
+      </label>
+
+      {% set has_matters = settings and settings.matters and settings.matters|length > 0 %}
+      <label>Matter
+        <select name="matter_select" id="matter_select" {% if not has_matters %}hidden{% endif %}>
+          <option value="">— choose —</option>
+          {% if has_matters %}
+            {% for m in settings.matters %}
+              <option value="{{ m }}" {% if request.form.get('matter') == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+            <option value="__other__" {% if request.form.get('matter') and (request.form.get('matter') not in settings.matters) %}selected{% endif %}>Other (type new…)</option>
+          {% endif %}
+        </select>
+        <input
+          name="matter"
+          id="matter_input"
+          value="{{ request.form.get('matter','') }}"
+          {% if has_matters and (not request.form.get('matter') or (request.form.get('matter') in settings.matters)) %}hidden{% endif %}
+          placeholder="Type new matter"
+        >
+      </label>
+
+      <label>Date of Work
+        <input
+          type="date"
+          name="date_of_work"
+          value="{{ request.form.get('date_of_work') or (date_today.isoformat() if date_today else '') }}"
+          required
+        >
+      </label>
+
+      <label>Hours
+        <div class="row gap" style="align-items:center">
+          <input
+            class="hours-input"
+            type="number"
+            inputmode="decimal"
+            step="0.1"
+            min="0"
+            name="hours"
+            value=""
+            placeholder="0.5"
+            required
+          >
+          <div class="row gap">
+            <button class="btn small" type="button" data-add="0.1" aria-label="Add 0.1 hours">+0.1</button>
+            <button class="btn small" type="button" data-add="0.2" aria-label="Add 0.2 hours">+0.2</button>
+            <button class="btn small" type="button" data-add="0.5" aria-label="Add 0.5 hours">+0.5</button>
+          </div>
+        </div>
+      </label>
+
+      {% set has_rates = settings and settings.rates and settings.rates|length > 0 %}
+      <label>Rate (optional)
+        <select name="rate_select" id="rate_select" {% if not has_rates %}hidden{% endif %}>
+          <option value="">— choose —</option>
+          {% if has_rates %}
+            {% for r in settings.rates %}
+              <option value="{{ r }}" {% if request.form.get('rate') == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+            <option value="__other__" {% if request.form.get('rate') and (request.form.get('rate') not in settings.rates) %}selected{% endif %}>Other (type new…)</option>
+          {% endif %}
+        </select>
+        <input
+          name="rate"
+          id="rate_input"
+          value="{{ request.form.get('rate','') }}"
+          {% if has_rates and (not request.form.get('rate') or (request.form.get('rate') in settings.rates)) %}hidden{% endif %}
+          placeholder="Type new rate (e.g., 350)"
+        >
+      </label>
+
+      <label>Timekeeper (optional)
+        <input
+          name="timekeeper"
+          value="{{ request.form.get('timekeeper', current_user.name if current_user.is_authenticated else '') }}"
+        >
+      </label>
+
+      <label class="full">Description
+        <textarea name="desc" rows="6" placeholder="What did you do?" required>{{ request.form.get('desc','') }}</textarea>
+      </label>
+    </div>
+
+    <div class="row space-between" style="margin-top:.75rem">
+      <a class="btn" href="{{ url_for('entries') }}">Back to Entries</a>
+      <div class="row gap">
+        <button type="submit" class="btn">Save &amp; New</button>
+        <button type="submit" name="close" value="1" class="btn primary">Save</button>
+      </div>
+    </div>
+  </form>
+</main>
+
+<script>
+  // -------------------- Stopwatch --------------------
+  (function () {
+    const $ = (sel) => document.querySelector(sel);
+    const card      = $('#stopwatch-card');
+    const startBtn  = $('#sw-start');
+    const pauseBtn  = $('#sw-pause');
+    const stopBtn   = $('#sw-stop');
+    const helpBtn   = $('#sw-help');
+    const display   = $('#sw-display');
+    const swForm    = $('#sw-form');
+
+    if (!card || !startBtn || !pauseBtn || !stopBtn || !display || !swForm) return;
+
+    const STOP_MIN_SECONDS = parseInt(card.dataset.stopMin || '300', 10) || 300;
+
+    let running = false;
+    let secs = 0;
+    let interval = null;
+
+    const pad = (n) => (n < 10 ? '0' + n : '' + n);
+    const fmt = (s) => `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}`;
+    const render = () => { display.textContent = fmt(secs); };
+
+    const start = () => {
+      if (running) return;
+      running = true;
+      interval = setInterval(() => { secs += 1; render(); }, 1000);
+    };
+    const pause = () => {
+      if (!running) return;
+      running = false;
+      clearInterval(interval); interval = null;
+    };
+    const reset = () => { pause(); secs = 0; render(); };
+
+    const askDescription = async () => {
+      while (true) {
+        const txt = window.prompt("Describe the work performed for this timed session:", "");
+        if (txt === null) {
+          const discard = window.confirm("Discard this stopwatch time without logging?");
+          if (discard) return null;
+          continue;
+        }
+        const t = (txt || "").trim();
+        if (t) return t;
+        window.alert("Please enter a brief description of the work performed.");
+      }
+    };
+
+    const getVal = (name, fallback = "") => {
+      const el = document.querySelector(`[name="${name}"]`);
+      return (el && (el.value || el.textContent || "")).trim() || fallback;
+    };
+    const toHours2 = (s) => Math.round((s / 3600) * 100) / 100;
+
+    startBtn.addEventListener('click', start);
+    pauseBtn.addEventListener('click', pause);
+    stopBtn.addEventListener('click', async () => {
+      const elapsed = secs;
+      reset();
+
+      if (elapsed < STOP_MIN_SECONDS) {
+        window.alert(`Session under ${Math.floor(STOP_MIN_SECONDS/60)} minutes — not logged.`);
+        return;
+      }
+
+      const desc = await askDescription();
+      if (desc === null) return;
+
+      const client = getVal('client', '(Unspecified)');
+      const matter = getVal('matter', '(Unspecified)');
+      const date   = getVal('date_of_work', (new Date()).toISOString().slice(0,10));
+      const hours  = toHours2(elapsed);
+
+      $('#sw-client').value  = client;
+      $('#sw-matter').value  = matter;
+      $('#sw-date').value    = date;
+      $('#sw-hours').value   = hours.toFixed(2);
+      $('#sw-desc').value    = desc;
+      $('#sw-elapsed').value = String(elapsed);
+
+      swForm.submit();
+    });
+
+    helpBtn?.addEventListener('click', () => {
+      const mins = Math.floor(STOP_MIN_SECONDS / 60);
+      alert(
+        [
+          "Stopwatch – How it works",
+          "",
+          "• Start: begins counting time.",
+          "• Pause: temporarily halts the clock (you can Start again).",
+          "• Stop: ends the session.",
+          "",
+          `When you press Stop, if the elapsed time is at least ${mins} minutes, the app asks you`,
+          "to describe the work performed and automatically adds an entry.",
+          "If it’s under the threshold, nothing is added."
+        ].join("\n")
+      );
+    });
+
+    render();
+  })();
+
+  // Dropdown + "Other" behavior
+  function hookupCombo(selectId, inputId) {
+    const sel = document.getElementById(selectId);
+    const inp = document.getElementById(inputId);
+    if (!sel || !inp) return;
+    const sync = () => {
+      if (sel.value === '__other__') {
+        inp.hidden = false;
+        inp.required = true;
+        inp.focus();
+      } else {
+        inp.hidden = true;
+        inp.required = false;
+        inp.value = sel.value || '';
+      }
+    };
+    sel.addEventListener('change', sync);
+    sync();
+  }
+  hookupCombo('client_select', 'client_input');
+  hookupCombo('matter_select', 'matter_input');
+  hookupCombo('rate_select', 'rate_input');
+
+  // Quick +hours buttons
+  (function () {
+    const hours = document.querySelector('input[name="hours"]');
+    if (!hours) return;
+    document.querySelectorAll('button[data-add]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inc = parseFloat(btn.getAttribute('data-add') || '0');
+        const cur = parseFloat(hours.value || '0') || 0;
+        const next = cur + inc;
+        hours.value = next.toFixed(2);
+        hours.focus();
+      });
+    });
+  })();
+
+  // Trim fields before submit
+  document.getElementById('entry-form')?.addEventListener('submit', function () {
+    for (const el of this.querySelectorAll('input, textarea')) {
+      if (el.name && typeof el.value === 'string') el.value = el.value.trim();
+    }
+  });
+</script>
+{% endblock %}

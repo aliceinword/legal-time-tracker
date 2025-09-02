@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Options · Legal Time Tracker{% endblock %}
+{% block content %}
+<main class="container">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <div class="flash">
+        {% for category, m in msgs %}
+          <div class="flash-item {{ category }}">{{ m }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <form action="{{ url_for('options') }}" method="post" class="card" novalidate>
+    <h1>User &amp; Email Settings</h1>
+
+    <div class="grid two">
+      <label>Your Name
+        <input type="text"
+               name="user_name"
+               value="{{ current_user.name if current_user.is_authenticated else '' }}"
+               autocomplete="name"
+               required>
+      </label>
+
+      <!-- Auto expand (tight checkbox) -->
+      <label class="checkline">
+        <input type="checkbox" name="auto_expand" value="1"
+               {% if settings and settings.auto_expand %}checked{% endif %}>
+        <span>Auto-expand legal abbreviations</span>
+      </label>
+
+      <label>Admin Email
+        <input type="email"
+               name="admin_email"
+               value="{{ settings.admin_email | default('') }}"
+               placeholder="admin@example.com"
+               autocomplete="email">
+      </label>
+
+      <label>Manager Email
+        <input type="email"
+               name="manager_email"
+               value="{{ settings.manager_email | default('') }}"
+               placeholder="manager@example.com"
+               autocomplete="email">
+      </label>
+    </div>
+
+    <h2>SMTP Fallback</h2>
+    <div class="grid three">
+      <label>SMTP Server
+        <input type="text"
+               name="smtp_server"
+               value="{{ settings.smtp_server | default('') }}"
+               placeholder="smtp.office365.com"
+               autocomplete="off">
+      </label>
+
+      <label>Port
+        <input type="number"
+               name="smtp_port"
+               value="{{ settings.smtp_port | default(587) }}"
+               min="1" step="1"
+               inputmode="numeric" pattern="\d*">
+      </label>
+
+      <!-- Use TLS (tight checkbox) -->
+      <label class="checkline">
+        <input type="checkbox" name="smtp_use_tls" value="1"
+               {% if settings and settings.smtp_use_tls %}checked{% endif %}>
+        <span>Use TLS</span>
+      </label>
+
+      <label>Username
+        <input type="text"
+               name="smtp_username"
+               value="{{ settings.smtp_username | default('') }}"
+               autocomplete="username">
+      </label>
+
+      <label>From Email
+        <input type="email"
+               name="smtp_from"
+               value="{{ settings.smtp_from | default('') }}"
+               placeholder="you@example.com"
+               autocomplete="email">
+      </label>
+    </div>
+
+    <h2>Master Lists</h2>
+    <p class="muted">One item per line. These feed the Client/Matter/Rate pickers on the entry screen.</p>
+
+    <div class="grid three">
+      <label>Clients
+        <textarea name="clients" rows="8" spellcheck="false">{{ (settings.clients or []) | join('\n') }}</textarea>
+      </label>
+
+      <label>Matters
+        <textarea name="matters" rows="8" spellcheck="false">{{ (settings.matters or []) | join('\n') }}</textarea>
+      </label>
+
+      <label>Rates
+        <textarea name="rates" rows="8" spellcheck="false">{{ (settings.rates or []) | join('\n') }}</textarea>
+      </label>
+    </div>
+
+    <div class="row end">
+      <button type="submit" class="btn primary">Save Options</button>
+    </div>
+  </form>
+</main>
+{% endblock %}
