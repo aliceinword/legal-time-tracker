@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Entries · Legal Time Tracker{% endblock %}
-
 {% block content %}
-
 <!-- Filters -->
 <form method="get" action="{{ url_for('entries') }}" class="card" id="filters-form">
   <!-- Quick ranges -->
@@ -18,9 +16,7 @@
        href="{{ url_for('entries', mode='all', q=q) }}">All</a>
     <span class="muted">…or set a custom range below.</span>
   </div>
-
   <input type="hidden" name="mode" id="mode" value="{{ mode or '30d' }}">
-
   <div class="grid four">
     <label>Search
       <input type="text" name="q" value="{{ q or '' }}" placeholder="client, matter, desc">
@@ -31,11 +27,9 @@
     <label>To
       <input type="date" name="to" id="to" value="{{ dto or '' }}">
     </label>
-
     <div class="row gap align-end">
       <button class="btn" type="submit">Apply</button>
       <a class="btn" href="{{ url_for('entries') }}">Clear</a>
-
       <!-- Export by filters (all matching rows) -->
       <a class="btn"
          href="{{ url_for('export_entries') }}?mode={{ mode|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
@@ -48,7 +42,6 @@
     </div>
   </div>
 </form>
-
 <!-- Totals + per-client chips -->
 <div class="card row space-between">
   <div><strong>Total hours:</strong> {{ "%.2f"|format(total_hours or 0) }}</div>
@@ -58,7 +51,6 @@
     {% endfor %}
   </div>
 </div>
-
 <!-- Batch delete + table + inline edit -->
 <form action="{{ url_for('entries_delete') }}" method="post" class="card" id="bulk-form">
   <div class="row space-between" style="margin-bottom:10px">
@@ -77,12 +69,10 @@
               name="export_selected" value="1">
         Export Selected (XLSX)
       </button>
-
       <!-- Only this one asks for confirmation -->
       <button class="btn danger small" type="submit" data-confirm="delete">Delete Selected</button>
     </div>
   </div>
-
   <div class="table-wrap">
     <table class="table" id="entries-table">
       <thead>
@@ -99,7 +89,7 @@
       </thead>
       <tbody>
         {% for e in rows %}
-        <tr>
+        <tr class="entry-row" data-entry-id="{{ e.id }}">
           <td data-label="Sel"><input type="checkbox" name="id" value="{{ e.id }}" class="row-check"></td>
           <td data-label="Client">{{ e.client }}</td>
           <td data-label="Matter">{{ e.matter }}</td>
@@ -109,7 +99,6 @@
           <td data-label="Description" class="desc">{{ e.desc }}</td>
           <td data-label="Actions" class="actions">
             <button class="btn small js-edit" data-id="{{ e.id }}" type="button">Edit</button>
-
             <!-- Per-row delete (separate form is OK here) -->
             <form action="{{ url_for('entries_delete') }}" method="post" class="inline"
                   onsubmit="return confirm('Delete this entry?');">
@@ -118,7 +107,6 @@
             </form>
           </td>
         </tr>
-
         <!-- Inline editor row (hidden; toggled by JS) -->
         <tr class="edit-row" id="edit-{{ e.id }}" style="display:none">
           <td></td>
@@ -155,7 +143,13 @@
     </table>
   </div>
 </form>
-
+<!-- Show offline entries only once -->
+<div class="offline-entries" style="display: none;">
+  <div class="alert alert-info">
+    📱 <span id="offline-count">0</span> entries saved offline
+    <button id="manual-sync" class="btn btn-sm btn-primary ml-2">Sync Now</button>
+  </div>
+</div>
 <!-- Small JS helpers -->
 <script>
   // If From/To are touched, force mode='range'
@@ -166,7 +160,6 @@
     if (from) from.addEventListener('input', () => { if(mode) mode.value = 'range'; });
     if (to)   to.addEventListener('input',   () => { if(mode) mode.value = 'range'; });
   })();
-
   // Select all checkboxes
   (function(){
     const all = document.getElementById('check-all');
@@ -174,7 +167,6 @@
     const rows = () => Array.from(document.querySelectorAll('.row-check'));
     all.addEventListener('change', () => rows().forEach(cb => cb.checked = all.checked));
   })();
-
   // Inline edit toggling
   (function(){
     function showRow(id, show){
@@ -195,7 +187,6 @@
     });
     window.saveRow = function(form){ return true; };
   })();
-
   // Confirm only when clicking "Delete Selected"
   (function(){
     const bulk = document.getElementById('bulk-form');
@@ -210,5 +201,4 @@
     });
   })();
 </script>
-
 {% endblock %}
