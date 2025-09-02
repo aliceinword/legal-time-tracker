@@ -4,14 +4,6 @@
 {% block content %}
 <main class="container narrow">
 
-  <!-- Page-scoped tweaks -->
-  <style>
-    /* Smaller Hours field; larger Description */
-    .hours-input { width: 110px; }
-    textarea[name="desc"] { min-height: 140px; width: 100%; resize: vertical; }
-    @media (max-width: 640px) { .hours-input { width: 90px; } }
-  </style>
-
   <!-- Stopwatch Card -->
   <div class="card soft" id="stopwatch-card" aria-label="Stopwatch" data-stop-min="{{ stop_min|default(300) }}">
     <div class="row space-between" style="margin-bottom:8px">
@@ -35,7 +27,7 @@
     </div>
   </div>
 
-  <!-- Invisible form we submit when a stopwatch session is saved -->
+  <!-- Hidden form we *would* submit online; we intercept for offline -->
   <form id="sw-form" action="{{ url_for('save_entry') }}" method="post" style="display:none">
     <input type="hidden" name="client" id="sw-client">
     <input type="hidden" name="matter" id="sw-matter">
@@ -43,7 +35,6 @@
     <input type="hidden" name="hours" id="sw-hours">
     <input type="hidden" name="desc" id="sw-desc">
     <input type="hidden" name="elapsed_seconds" id="sw-elapsed">
-    <!-- <input type="hidden" name="close" value="1"> -->
   </form>
 
   {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -76,8 +67,7 @@
           value="{{ request.form.get('client','') }}"
           {% if has_clients and (not request.form.get('client') or (request.form.get('client') in settings.clients)) %}hidden{% endif %}
           {% if not has_clients %}required{% endif %}
-          placeholder="Type new client"
-        >
+          placeholder="Type new client">
       </label>
 
       {% set has_matters = settings and settings.matters and settings.matters|length > 0 %}
@@ -96,32 +86,19 @@
           id="matter_input"
           value="{{ request.form.get('matter','') }}"
           {% if has_matters and (not request.form.get('matter') or (request.form.get('matter') in settings.matters)) %}hidden{% endif %}
-          placeholder="Type new matter"
-        >
+          placeholder="Type new matter">
       </label>
 
       <label>Date of Work
-        <input
-          type="date"
-          name="date_of_work"
-          value="{{ request.form.get('date_of_work') or (date_today.isoformat() if date_today else '') }}"
-          required
-        >
+        <input type="date" name="date_of_work"
+               value="{{ request.form.get('date_of_work') or (date_today.isoformat() if date_today else '') }}"
+               required>
       </label>
 
       <label>Hours
-        <div class="row gap" style="align-items:center">
-          <input
-            class="hours-input"
-            type="number"
-            inputmode="decimal"
-            step="0.1"
-            min="0"
-            name="hours"
-            value=""
-            placeholder="0.5"
-            required
-          >
+        <div class="row gap">
+          <input type="number" step="0.1" min="0" name="hours"
+                 value="" placeholder="e.g., 0.5" required style="flex:1">
           <div class="row gap">
             <button class="btn small" type="button" data-add="0.1" aria-label="Add 0.1 hours">+0.1</button>
             <button class="btn small" type="button" data-add="0.2" aria-label="Add 0.2 hours">+0.2</button>
@@ -141,24 +118,18 @@
             <option value="__other__" {% if request.form.get('rate') and (request.form.get('rate') not in settings.rates) %}selected{% endif %}>Other (type new…)</option>
           {% endif %}
         </select>
-        <input
-          name="rate"
-          id="rate_input"
-          value="{{ request.form.get('rate','') }}"
-          {% if has_rates and (not request.form.get('rate') or (request.form.get('rate') in settings.rates)) %}hidden{% endif %}
-          placeholder="Type new rate (e.g., 350)"
-        >
+        <input name="rate" id="rate_input" value="{{ request.form.get('rate','') }}"
+               {% if has_rates and (not request.form.get('rate') or (request.form.get('rate') in settings.rates)) %}hidden{% endif %}
+               placeholder="Type new rate (e.g., 350)">
       </label>
 
       <label>Timekeeper (optional)
-        <input
-          name="timekeeper"
-          value="{{ request.form.get('timekeeper', current_user.name if current_user.is_authenticated else '') }}"
-        >
+        <input name="timekeeper"
+               value="{{ request.form.get('timekeeper', current_user.name if current_user.is_authenticated else '') }}">
       </label>
 
       <label class="full">Description
-        <textarea name="desc" rows="6" placeholder="What did you do?" required>{{ request.form.get('desc','') }}</textarea>
+        <textarea name="desc" rows="5" placeholder="What did you do?" required>{{ request.form.get('desc','') }}</textarea>
       </label>
     </div>
 
@@ -173,6 +144,21 @@
 </main>
 
 <script>
+  // -------------------- Helper: offline queue --------------------
+  const OFFLINE_KEY = 'offline_entries';
+  function offlineGet() {
+    try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function offlineSet(arr) {
+    localStorage.setItem(OFFLINE_KEY, JSON.stringify(arr || []));
+  }
+  function queueOffline(payload) {
+    const arr = offlineGet();
+    arr.push(payload);
+    offlineSet(arr);
+  }
+
   // -------------------- Stopwatch --------------------
   (function () {
     const $ = (sel) => document.querySelector(sel);
@@ -182,30 +168,18 @@
     const stopBtn   = $('#sw-stop');
     const helpBtn   = $('#sw-help');
     const display   = $('#sw-display');
-    const swForm    = $('#sw-form');
 
-    if (!card || !startBtn || !pauseBtn || !stopBtn || !display || !swForm) return;
+    if (!card || !startBtn || !pauseBtn || !stopBtn || !display) return;
 
     const STOP_MIN_SECONDS = parseInt(card.dataset.stopMin || '300', 10) || 300;
-
-    let running = false;
-    let secs = 0;
-    let interval = null;
+    let running = false, secs = 0, interval = null;
 
     const pad = (n) => (n < 10 ? '0' + n : '' + n);
     const fmt = (s) => `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}`;
     const render = () => { display.textContent = fmt(secs); };
 
-    const start = () => {
-      if (running) return;
-      running = true;
-      interval = setInterval(() => { secs += 1; render(); }, 1000);
-    };
-    const pause = () => {
-      if (!running) return;
-      running = false;
-      clearInterval(interval); interval = null;
-    };
+    const start = () => { if (!running) { running = true; interval = setInterval(()=>{ secs+=1; render(); }, 1000); } };
+    const pause = () => { if (running) { running = false; clearInterval(interval); interval = null; } };
     const reset = () => { pause(); secs = 0; render(); };
 
     const askDescription = async () => {
@@ -242,19 +216,31 @@
       const desc = await askDescription();
       if (desc === null) return;
 
-      const client = getVal('client', '(Unspecified)');
-      const matter = getVal('matter', '(Unspecified)');
-      const date   = getVal('date_of_work', (new Date()).toISOString().slice(0,10));
-      const hours  = toHours2(elapsed);
+      const payload = {
+        client: getVal('client', '(Unspecified)'),
+        matter: getVal('matter', '(Unspecified)'),
+        date_of_work: getVal('date_of_work', (new Date()).toISOString().slice(0,10)),
+        hours: toHours2(elapsed).toFixed(2),
+        desc: desc,
+        elapsed_seconds: String(elapsed)
+      };
 
-      $('#sw-client').value  = client;
-      $('#sw-matter').value  = matter;
-      $('#sw-date').value    = date;
-      $('#sw-hours').value   = hours.toFixed(2);
-      $('#sw-desc').value    = desc;
-      $('#sw-elapsed').value = String(elapsed);
-
-      swForm.submit();
+      if (navigator.onLine) {
+        // Submit as a regular form to keep flash/redirect behavior
+        const f = document.getElementById('sw-form');
+        f.querySelector('#sw-client').value  = payload.client;
+        f.querySelector('#sw-matter').value  = payload.matter;
+        f.querySelector('#sw-date').value    = payload.date_of_work;
+        f.querySelector('#sw-hours').value   = payload.hours;
+        f.querySelector('#sw-desc').value    = payload.desc;
+        f.querySelector('#sw-elapsed').value = payload.elapsed_seconds;
+        f.submit();
+      } else {
+        queueOffline(payload);
+        alert('No internet – stopwatch entry saved offline.');
+        // go to list so user sees banner
+        location.href = "{{ url_for('entries') }}";
+      }
     });
 
     helpBtn?.addEventListener('click', () => {
@@ -315,11 +301,37 @@
     });
   })();
 
-  // Trim fields before submit
-  document.getElementById('entry-form')?.addEventListener('submit', function () {
-    for (const el of this.querySelectorAll('input, textarea')) {
-      if (el.name && typeof el.value === 'string') el.value = el.value.trim();
-    }
-  });
+  // Intercept main form submit for offline queue
+  (function(){
+    const form = document.getElementById('entry-form');
+    if (!form) return;
+    form.addEventListener('submit', function(ev){
+      // trim
+      for (const el of this.querySelectorAll('input, textarea')) {
+        if (el.name && typeof el.value === 'string') el.value = el.value.trim();
+      }
+      if (navigator.onLine) return; // let it submit normally
+
+      ev.preventDefault();
+      const fd = new FormData(this);
+      const payload = {};
+      fd.forEach((v,k) => { payload[k] = String(v); });
+
+      // Map selects to underlying text inputs if needed
+      if (payload.client_select && !payload.client) payload.client = payload.client_select;
+      if (payload.matter_select && !payload.matter) payload.matter = payload.matter_select;
+      if (payload.rate_select   && !payload.rate)   payload.rate   = payload.rate_select;
+
+      // Normalize basics
+      payload.client = payload.client || '(Unspecified)';
+      payload.matter = payload.matter || '(Unspecified)';
+      payload.date_of_work = payload.date_of_work || (new Date()).toISOString().slice(0,10);
+      payload.hours = (parseFloat(payload.hours || '0') || 0).toFixed(2);
+
+      queueOffline(payload);
+      alert('No internet – entry saved offline. You can sync it from the Entries page.');
+      location.href = "{{ url_for('entries') }}";
+    });
+  })();
 </script>
 {% endblock %}
