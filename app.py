@@ -917,6 +917,86 @@ def create_app():
     def manifest():
         """Serve PWA manifest."""
         return app.send_static_file('manifest.json')
+        # --- Mobile API Routes ---
+    @app.route('/api/quick-entry', methods=['POST'])
+    @login_required
+    def api_quick_entry():
+        """Quick entry API for offline sync."""
+        data = request.get_json() or {}
+        
+        client = data.get('client', '').strip() or "(Unspecified)"
+        matter = data.get('matter', '').strip() or "(Unspecified)" 
+        hours = float(data.get('hours', 0))
+        desc = data.get('desc', '').strip()
+        date_str = data.get('date_of_work', '')
+        timekeeper = data.get('timekeeper', '').strip() or current_user.name
+        # Parse date
+        try:
+            work_date = datetime.fromisoformat(date_str).date() if date_str else date.today()
+        except:
+            work_date = date.today()
+        
+        with Session(engine) as s:
+            us = get_settings(current_user.id, s)
+            if us.auto_expand == 1:
+                desc = replace_abbreviations(desc)
+                
+            s.add(Entry(
+                user_id=current_user.id,
+                client=client,
+                matter=matter,
+                date_of_work=work_date,
+                hours=hours,
+                timekeeper=timekeeper,
+                desc=desc
+            ))
+            s.commit()
+            
+        return jsonify({'success': True, 'message': 'Entry saved'})
+
+    @app.route('/api/entries-cache', methods=['GET'])
+    @login_required
+    def api_entries_cache():
+        """Get recent entries for offline caching."""
+        with Session(engine) as s:
+            # Get last 50 entries for offline viewing
+            recent_entries = s.scalars(
+                select(Entry)
+                .where(Entry.user_id == current_user.id)
+                .order_by(Entry.date_of_work.desc(), Entry.id.desc())
+                .limit(50)
+            ).all()
+            
+            entries_data = []
+            for r in recent_entries:
+                entries_data.append({
+                    'id': r.id,
+                    'client': r.client,
+                    'matter': r.matter,
+                    'date_of_work': r.date_of_work.isoformat(),
+                    'hours': r.hours,
+                    'timekeeper': r.timekeeper,
+                    'desc': r.desc
+                })
+                
+        return jsonify({
+            'entries': entries_data,
+            'cached_at': datetime.now().isoformat()
+        })
+
+    @app.route('/api/user-data', methods=['GET'])
+    @login_required
+    def api_user_data():
+        """Get user's clients/matters for offline autocomplete."""
+        with Session(engine) as s:
+            clients = [c.name for c in s.scalars(select(ClientName).where(ClientName.user_id == current_user.id).order_by(ClientName.name))]
+            matters = [m.name for m in s.scalars(select(MatterName).where(MatterName.user_id == current_user.id).order_by(MatterName.name))]
+            
+        return jsonify({
+            'clients': clients,
+            'matters': matters,
+            'timekeeper': current_user.name
+        })
     
     @app.route('/sw.js')
     def service_worker():
@@ -1066,4 +1146,5 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
+
 
