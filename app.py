@@ -23,7 +23,7 @@ from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash,
-    send_file, abort
+    send_file, abort, jsonify  # ← added jsonify
 )
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required,
@@ -358,7 +358,7 @@ def create_app():
         """
         q_text = (q or "").strip()
         stmt = select(Entry).where(Entry.user_id == user_id)
-               
+
         today = date.today()
         if mode == "7d":
             stmt = stmt.where(Entry.date_of_work >= today - timedelta(days=7))
@@ -378,7 +378,7 @@ def create_app():
             pass
         else:
             stmt = stmt.where(Entry.date_of_work >= today - timedelta(days=30))
-        
+
         if q_text:
             for term in q_text.split():
                 like = f"%{term}%"
@@ -390,9 +390,9 @@ def create_app():
                         Entry.desc.ilike(like),
                     )
                 )
-        return stmt.order_by(Entry.date_of_work.desc(), Entry.id.desc()
-                             
-   # --- Admin guard ---
+        return stmt.order_by(Entry.date_of_work.desc(), Entry.id.desc())
+
+    # --- Admin guard ---
     def admin_required(fn):
         @wraps(fn)
         @login_required
@@ -401,12 +401,12 @@ def create_app():
                 abort(403)
             return fn(*args, **kwargs)
         return wrapper
-                             
-     # Expose defaults for templates
+
+    # Expose defaults for templates
     @app.context_processor
     def _inject_defaults():
-        return {"form": {}}                           
-   
+        return {"form": {}}
+
     # --- Health / index / 404 ---
     @app.get("/healthz")
     def healthz():
@@ -923,41 +923,40 @@ def create_app():
         assert replace_abbreviations("Met with OP re OSC") == "Met with Opposing Counsel re Order to Show Cause"
         return "ok"
 
-    # Print routes so you can see exact endpoint names
-    print("\nRegistered routes:")
-    for r in app.url_map.iter_rules():
-        print(f"  {r.endpoint:20} -> {r.rule}")
-    print()
-  # --- PWA Routes (add these to your existing app.py) ---
+    # --- PWA Routes ---
     @app.route('/manifest.json')
     def manifest():
         """Serve PWA manifest."""
         return app.send_static_file('manifest.json')
 
-    # --- Mobile API Routes ---
-    @app.route('/api/quick-entry', methods=['POST'])
+    # --- Mobile API Routes (single canonical quick-entry) ---
+    @app.route('/api/quick-entry', methods=['POST'], endpoint='api_quick_entry')
     @login_required
     def api_quick_entry():
-        """Quick entry API for offline sync."""
+        """Quick entry API for offline sync (supports date_of_work & timekeeper)."""
         data = request.get_json() or {}
-        
-        client = data.get('client', '').strip() or "(Unspecified)"
-        matter = data.get('matter', '').strip() or "(Unspecified)" 
-        hours = float(data.get('hours', 0))
-        desc = data.get('desc', '').strip()
-        date_str = data.get('date_of_work', '')
-        timekeeper = data.get('timekeeper', '').strip() or current_user.name
+
+        client = (data.get('client') or '').strip() or "(Unspecified)"
+        matter = (data.get('matter') or '').strip() or "(Unspecified)"
+        try:
+            hours = float(data.get('hours', 0))
+        except Exception:
+            hours = 0.0
+        desc = (data.get('desc') or '').strip()
+        date_str = (data.get('date_of_work') or '').strip()
+        timekeeper = (data.get('timekeeper') or '').strip() or current_user.name
+
         # Parse date
         try:
             work_date = datetime.fromisoformat(date_str).date() if date_str else date.today()
-        except:
+        except Exception:
             work_date = date.today()
-        
+
         with Session(engine) as s:
             us = get_settings(current_user.id, s)
             if us.auto_expand == 1:
                 desc = replace_abbreviations(desc)
-                
+
             s.add(Entry(
                 user_id=current_user.id,
                 client=client,
@@ -968,7 +967,7 @@ def create_app():
                 desc=desc
             ))
             s.commit()
-            
+
         return jsonify({'success': True, 'message': 'Entry saved'})
 
     @app.route('/api/entries-cache', methods=['GET'])
@@ -983,7 +982,7 @@ def create_app():
                 .order_by(Entry.date_of_work.desc(), Entry.id.desc())
                 .limit(50)
             ).all()
-            
+
             entries_data = []
             for r in recent_entries:
                 entries_data.append({
@@ -995,7 +994,7 @@ def create_app():
                     'timekeeper': r.timekeeper,
                     'desc': r.desc
                 })
-                
+
         return jsonify({
             'entries': entries_data,
             'cached_at': datetime.now().isoformat()
@@ -1008,47 +1007,17 @@ def create_app():
         with Session(engine) as s:
             clients = [c.name for c in s.scalars(select(ClientName).where(ClientName.user_id == current_user.id).order_by(ClientName.name))]
             matters = [m.name for m in s.scalars(select(MatterName).where(MatterName.user_id == current_user.id).order_by(MatterName.name))]
-            
+
         return jsonify({
             'clients': clients,
             'matters': matters,
             'timekeeper': current_user.name
         })
-    
+
     @app.route('/sw.js')
     def service_worker():
         """Serve service worker."""
         return app.send_static_file('sw.js')
-
-    # --- Mobile API Routes ---
-    @app.route('/api/quick-entry', methods=['POST'])
-    @login_required
-    def api_quick_entry():
-        """Quick entry API for mobile - minimal data required."""
-        data = request.get_json() or {}
-        
-        client = data.get('client', '').strip() or "(Unspecified)"
-        matter = data.get('matter', '').strip() or "(Unspecified)" 
-        hours = float(data.get('hours', 0))
-        desc = data.get('desc', '').strip()
-        
-        with Session(engine) as s:
-            us = get_settings(current_user.id, s)
-            if us.auto_expand == 1:
-                desc = replace_abbreviations(desc)
-                
-            s.add(Entry(
-                user_id=current_user.id,
-                client=client,
-                matter=matter,
-                date_of_work=date.today(),
-                hours=hours,
-                timekeeper=current_user.name,
-                desc=desc
-            ))
-            s.commit()
-            
-        return jsonify({'success': True, 'message': 'Entry saved'})
 
     @app.route('/api/today-summary', methods=['GET'])
     @login_required
@@ -1061,9 +1030,9 @@ def create_app():
                     Entry.date_of_work == date.today()
                 )
             ).all()
-            
+
             total_today = sum(e.hours or 0 for e in today_entries)
-            
+
             # Week summary
             week_start = date.today() - timedelta(days=date.today().weekday())
             week_entries = s.scalars(
@@ -1072,9 +1041,9 @@ def create_app():
                     Entry.date_of_work >= week_start
                 )
             ).all()
-            
+
             total_week = sum(e.hours or 0 for e in week_entries)
-            
+
         return jsonify({
             'today': {
                 'hours': round(total_today, 2),
@@ -1087,7 +1056,7 @@ def create_app():
         })
 
     @app.route('/api/recent-clients', methods=['GET'])
-    @login_required  
+    @login_required
     def api_recent_clients():
         """Get recently used clients for mobile autocomplete."""
         with Session(engine) as s:
@@ -1098,7 +1067,7 @@ def create_app():
                 .order_by(func.max(Entry.date_of_work).desc())
                 .limit(10)
             ).all()
-            
+
         return jsonify([row[0] for row in recent if row[0]])
 
     # --- Timer Routes ---
@@ -1111,7 +1080,7 @@ def create_app():
             us = get_settings(current_user.id, s)
             us.clients = [c.name for c in s.scalars(select(ClientName).where(ClientName.user_id == current_user.id).order_by(ClientName.name))]
             us.matters = [m.name for m in s.scalars(select(MatterName).where(MatterName.user_id == current_user.id).order_by(MatterName.name))]
-            
+
         return render_template('timer.html', settings=us, date_today=date.today())
 
     # --- Dashboard Route ---
@@ -1127,7 +1096,7 @@ def create_app():
                     Entry.date_of_work == date.today()
                 )
             ).all()
-            
+
             # This week's entries
             week_start = date.today() - timedelta(days=date.today().weekday())
             week_entries = s.scalars(
@@ -1136,7 +1105,7 @@ def create_app():
                     Entry.date_of_work >= week_start
                 )
             ).all()
-            
+
             # Top clients this month
             month_start = date.today().replace(day=1)
             client_hours = s.execute(
@@ -1149,21 +1118,25 @@ def create_app():
                 .order_by(func.sum(Entry.hours).desc())
                 .limit(5)
             ).all()
-            
-        return render_template('dashboard.html', 
+
+        return render_template(
+            'dashboard.html',
             today_entries=today_entries,
             week_entries=week_entries,
             client_hours=client_hours,
             today_total=sum(e.hours or 0 for e in today_entries),
             week_total=sum(e.hours or 0 for e in week_entries)
         )
+
+    # Print routes so you can see exact endpoint names (placed at the end)
+    print("\nRegistered routes:")
+    for r in app.url_map.iter_rules():
+        print(f"  {r.endpoint:20} -> {r.rule}")
+    print()
+
     return app
 
 
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
-
-
-
-
