@@ -519,13 +519,21 @@ def create_app():
             us.clients = [c.name for c in s.scalars(select(ClientName).where(ClientName.user_id == current_user.id).order_by(ClientName.name))]
             us.matters = [m.name for m in s.scalars(select(MatterName).where(MatterName.user_id == current_user.id).order_by(MatterName.name))]
             us.rates   = [r.name for r in s.scalars(select(RateName).where(RateName.user_id == current_user.id).order_by(RateName.name))]
+     # NEW: fetch most recent entry for this user
+        latest = s.scalars(
+            select(Entry)
+            .where(Entry.user_id == current_user.id)
+            .order_by(Entry.date_of_work.desc(), Entry.id.desc())
+            .limit(1)
+        ).first()
 
-        return render_template(
-            "entry.html",
-            settings=us,
-            date_today=date.today(),
-            stop_min=STOPWATCH_MIN_SECONDS,
-        )
+    return render_template(
+        "entry.html",
+        settings=us,
+        date_today=date.today(),
+        stop_min=STOPWATCH_MIN_SECONDS,
+        latest=latest,  # NEW
+    )
 
     @app.post("/entry")
     @login_required
@@ -1140,3 +1148,4 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
+
