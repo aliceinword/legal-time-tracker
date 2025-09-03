@@ -124,16 +124,16 @@
       </label>
 
       <label>Hours
-        <div class="row gap">
-          <input type="number" step="0.1" min="0" name="hours"
-                 value="" placeholder="e.g., 0.5" required style="flex:1">
-          <div class="row gap">
-            <button class="btn small" type="button" data-add="0.1" aria-label="Add 0.1 hours">+0.1</button>
-            <button class="btn small" type="button" data-add="0.2" aria-label="Add 0.2 hours">+0.2</button>
-            <button class="btn small" type="button" data-add="0.5" aria-label="Add 0.5 hours">+0.5</button>
-          </div>
-        </div>
-      </label>
+  <div class="row gap hours-group">
+    <input type="number" step="0.1" min="0" name="hours"
+           value="" placeholder="e.g., 0.5" required style="flex:1">
+    <div class="row gap quick-add">
+      <button class="btn small" type="button" data-add="0.1" aria-label="Add 0.1 hours">+0.1</button>
+      <button class="btn small" type="button" data-add="0.2" aria-label="Add 0.2 hours">+0.2</button>
+      <button class="btn small" type="button" data-add="0.5" aria-label="Add 0.5 hours">+0.5</button>
+    </div>
+  </div>
+</label>
 
       {% set has_rates = settings and settings.rates and settings.rates|length > 0 %}
       <label>Rate (optional)
@@ -400,3 +400,4 @@
   })();
 </script>
 {% endblock %}
+
