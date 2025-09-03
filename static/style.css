@@ -106,6 +106,21 @@ input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
 .grid.four{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:16px}
 @media (max-width:900px){ .grid.two,.grid.three,.grid.four{grid-template-columns:1fr} }
 
+/* Let fields span multiple columns in grid forms */
+.grid.two .col-span-2,
+.grid.three .col-span-2,
+.grid.four .col-span-2 { grid-column: span 2; }
+
+.grid.two .col-span-all,
+.grid.three .col-span-all,
+.grid.four .col-span-all { grid-column: 1 / -1; }
+
+/* Mobile: falling back to single column is fine */
+@media (max-width:900px){
+  .col-span-2, .col-span-all { grid-column: auto; }
+}
+
+
 /* Buttons */
 .btn{
   border:1px solid var(--border);background:var(--card);
@@ -379,4 +394,5 @@ body.auth-slim .topbar{ box-shadow:none; }
 @media (max-width: 640px) {
   .hours-input { width: 90px; }
 }
+
 
