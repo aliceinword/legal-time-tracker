@@ -359,7 +359,7 @@ def create_app():
         q_text = (q or "").strip()
         stmt = select(Entry).where(Entry.user_id == user_id)
                
-                    today = date.today()
+        today = date.today()
         if mode == "7d":
             stmt = stmt.where(Entry.date_of_work >= today - timedelta(days=7))
         elif mode == "30d":
@@ -1163,6 +1163,7 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
+
 
 
 
