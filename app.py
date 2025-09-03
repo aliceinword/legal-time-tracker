@@ -31,7 +31,7 @@ from flask_login import (
 )
 from sqlalchemy import (
     create_engine, Integer, String, Float, Date, Text,
-    ForeignKey, select, func, UniqueConstraint
+    ForeignKey, select, func, UniqueConstraint, or_
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -341,13 +341,25 @@ def create_app():
             s.commit()
         return us
 
-    def filtered_entries_query(s: Session, user_id: int, mode: str,
-                               dfrom: str | None, dto: str | None, q: str | None):
-        """Filter list to support UI modes: 7d, 30d, 90d, range, all."""
-        q_text = (q or "").strip().lower()
-        stmt = select(Entry).where(Entry.user_id == user_id)
+    def filtered_entries_query(
+        s: Session,
+        user_id: int,
+        mode: str,
+        dfrom: str | None,
+        dto: str | None,
+        q: str | None,
+    ):
+        """Return a query for the user's entries filtered by date range and search.
 
-        today = date.today()
+        ``mode`` selects a predefined date span (7d/30d/90d/range/all). ``q`` is
+        a free-text search where each space-separated term is matched
+        case-insensitively against the client, matter, timekeeper, or description
+        fields. An entry must satisfy *all* terms to be returned.
+        """
+        q_text = (q or "").strip()
+        stmt = select(Entry).where(Entry.user_id == user_id)
+               
+                    today = date.today()
         if mode == "7d":
             stmt = stmt.where(Entry.date_of_work >= today - timedelta(days=7))
         elif mode == "30d":
@@ -366,17 +378,21 @@ def create_app():
             pass
         else:
             stmt = stmt.where(Entry.date_of_work >= today - timedelta(days=30))
-
+        
         if q_text:
-            like = f"%{q_text}%"
-            stmt = stmt.where(
-                (Entry.client.ilike(like)) |
-                (Entry.matter.ilike(like)) |
-                (Entry.desc.ilike(like))
-            )
-        return stmt.order_by(Entry.date_of_work.desc(), Entry.id.desc())
-
-    # --- Admin guard ---
+            for term in q_text.split():
+                like = f"%{term}%"
+                stmt = stmt.where(
+                    or_(
+                        Entry.client.ilike(like),
+                        Entry.matter.ilike(like),
+                        Entry.timekeeper.ilike(like),
+                        Entry.desc.ilike(like),
+                    )
+                )
+        return stmt.order_by(Entry.date_of_work.desc(), Entry.id.desc()
+                             
+   # --- Admin guard ---
     def admin_required(fn):
         @wraps(fn)
         @login_required
@@ -385,12 +401,12 @@ def create_app():
                 abort(403)
             return fn(*args, **kwargs)
         return wrapper
-
-    # Expose defaults for templates
+                             
+     # Expose defaults for templates
     @app.context_processor
     def _inject_defaults():
-        return {"form": {}}
-
+        return {"form": {}}                           
+   
     # --- Health / index / 404 ---
     @app.get("/healthz")
     def healthz():
@@ -912,12 +928,13 @@ def create_app():
     for r in app.url_map.iter_rules():
         print(f"  {r.endpoint:20} -> {r.rule}")
     print()
-# --- PWA Routes (add these to your existing app.py) ---
+  # --- PWA Routes (add these to your existing app.py) ---
     @app.route('/manifest.json')
     def manifest():
         """Serve PWA manifest."""
         return app.send_static_file('manifest.json')
-        # --- Mobile API Routes ---
+
+    # --- Mobile API Routes ---
     @app.route('/api/quick-entry', methods=['POST'])
     @login_required
     def api_quick_entry():
@@ -1146,5 +1163,6 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=False, host="0.0.0.0", port=5050)
+
 
 
