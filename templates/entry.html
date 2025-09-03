@@ -159,6 +159,32 @@
     arr.push(payload);
     offlineSet(arr);
   }
+{% if latest %}
+<div class="card soft" id="latest-card"
+     data-client="{{ latest.client|e }}"
+     data-matter="{{ latest.matter|e }}"
+     data-timekeeper="{{ (latest.timekeeper or current_user.name)|e }}"
+     data-date="{{ latest.date_of_work.isoformat() }}"
+     data-hours="{{ '%.2f'|format(latest.hours or 0) }}"
+     data-desc="{{ latest.desc|e }}">
+  <div class="row space-between" style="margin-bottom:6px">
+    <h2 style="margin:0">Most Recent Entry</h2>
+    <button type="button" class="btn small" id="latest-fill">Use These Values</button>
+  </div>
+  <div class="grid two">
+    <div>
+      <div><strong>Client:</strong> {{ latest.client }}</div>
+      <div><strong>Matter:</strong> {{ latest.matter }}</div>
+      <div><strong>Date:</strong> {{ latest.date_of_work }}</div>
+    </div>
+    <div>
+      <div><strong>Timekeeper:</strong> {{ latest.timekeeper or current_user.name }}</div>
+      <div><strong>Hours:</strong> {{ '%.2f'|format(latest.hours or 0) }}</div>
+      <div class="muted" style="margin-top:4px"><strong>Description:</strong> {{ latest.desc }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
   // -------------------- Stopwatch --------------------
   (function () {
@@ -335,4 +361,45 @@
     });
   })();
 </script>
+<script>
+  // --- Prefill New Entry form from the "Most Recent Entry" card ---
+  (function(){
+    const btn = document.getElementById('latest-fill');
+    const card = document.getElementById('latest-card');
+    if (!btn || !card) return;
+
+    function setCombo(base, value){
+      const sel = document.getElementById(base + '_select');
+      const inp = document.getElementById(base + '_input');
+      if (!sel) { if (inp) inp.value = value; return; }
+
+      const values = Array.from(sel.options).map(o => o.value);
+      if (values.includes(value)) {
+        sel.value = value;
+        if (inp) { inp.hidden = true; inp.required = false; inp.value = ''; }
+      } else {
+        if (values.includes('__other__')) sel.value = '__other__';
+        if (inp) { inp.hidden = false; inp.required = true; inp.value = value; }
+      }
+      sel.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+
+    btn.addEventListener('click', () => {
+      setCombo('client', card.dataset.client || '');
+      setCombo('matter', card.dataset.matter || '');
+
+      const tk = document.querySelector('input[name="timekeeper"]');
+      if (tk) tk.value = card.dataset.timekeeper || tk.value || '';
+
+      const date = document.querySelector('input[name="date_of_work"]');
+      if (date) date.value = (new Date()).toISOString().slice(0,10);  // use today
+
+      const hrs = document.querySelector('input[name="hours"]');
+      if (hrs) { hrs.value = ''; hrs.focus(); } // start fresh on hours
+      const desc = document.querySelector('textarea[name="desc"]');
+      if (desc) desc.value = '';                // leave description empty on purpose
+    });
+  })();
+</script>
 {% endblock %}
+
