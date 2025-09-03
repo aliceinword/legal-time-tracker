@@ -2,84 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <!-- Viewport (single, corrected) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 
   <title>{% block title %}Legal Time Tracker{% endblock %}</title>
 
-  <!-- App / PWA -->
-  <link rel="manifest" href="/manifest.json">
+  <!-- PWA Meta / Icons -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#007bff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
-  
-  <!-- Mobile CSS -->
-<link rel="stylesheet"
-<!-- Mobile CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
-<!-- Offline JavaScript -->
-<script src="{{ url_for('static', filename='offline.js') }}"></script>
-
-<!-- PWA Registration -->
-<script>
-if ('serviceWorker' in navigator) {
- window.addEventListener('load', () => {
-   navigator.serviceWorker.register('/sw.js')
-     .then(reg => console.log('SW registered'))
-     .catch(err => console.log('SW registration failed'));
- });
-}
-</script>
-  <!-- Styles -->
+  <!-- App CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body class="theme">
-<header class="topbar">
-  <div class="brand"><a href="{{ url_for('entries') }}">Legal Time Tracker</a></div>
-  <nav>
-    {% if current_user.is_authenticated %}
-      <a href="{{ url_for('entries') }}">Entries</a>
-      <a href="{{ url_for('entry') }}">New Entry</a>
-      <a href="{{ url_for('options') }}">Options</a>
-      {% if current_user.is_admin %}<a href="{{ url_for('admin_users') }}">Admin</a>{% endif %}
-      <span class="spacer"></span>
-      <span class="user">👤 {{ current_user.name }}</span>
-      <a class="btn link" href="{{ url_for('logout') }}">Logout</a>
-    {% else %}
-      <a class="btn" href="{{ url_for('login') }}">Login</a>
-    {% endif %}
-    <button id="theme-toggle" class="btn icon" title="Toggle theme">🌓</button>
-  </nav>
-</header>
+  <!-- Mobile CSS (corrected broken tag) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}">
 
-<main class="container">
-  {% with msgs = get_flashed_messages(with_categories=true) %}
-    {% if msgs %}
-      <div class="flash">
-        {% for category, m in msgs %}
-          <div class="flash-item {{ category }}">{{ m }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-  {% block content %}{% endblock %}
-</main>
+  <!-- Offline JS (deferred so it doesn't block rendering) -->
+  <script defer src="{{ url_for('static', filename='offline.js') }}"></script>
 
-<script>
-  // Simple dark-mode toggle
-  (function(){
-    const key = 'lt_theme';
-    const el = document.querySelector('body.theme');
-    const saved = localStorage.getItem(key);
-    if (saved) el.dataset.theme = saved;
-    document.getElementById('theme-toggle')?.addEventListener('click', () => {
-      el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem(key, el.dataset.theme);
-    });
-    if (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      el.dataset.theme = 'dark';
+  <!-- PWA Registration (uses static sw.js path) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swUrl = "{{ url_for('static', filename='sw.js') }}";
+        navigator.serviceWorker.register(swUrl)
+          .then(() => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed', err));
+      });
     }
-  })();
-</script>
+  </script>
+</head>
+<body class="theme" data-theme="light">
+  <header class="topbar">
+    <div class="brand">
+      <a href="{{ url_for('entries') }}">Legal Time Tracker</a>
+    </div>
+    <nav class="nav">
+      {% if current_user.is_authenticated %}
+        <a href="{{ url_for('entries') }}">Entries</a>
+        <a href="{{ url_for('entry') }}">New Entry</a>
+        <a href="{{ url_for('options') }}">Options</a>
+        {% if current_user.is_admin %}
+          <a href="{{ url_for('admin_users') }}">Admin</a>
+        {% endif %}
+        <span class="spacer"></span>
+        <span class="user">👤 {{ current_user.name }}</span>
+        <a class="btn link" href="{{ url_for('logout') }}">Logout</a>
+      {% else %}
+        <span class="spacer"></span>
+        <a class="btn" href="{{ url_for('login') }}">Login</a>
+        <a class="btn primary" href="{{ url_for('register') }}">Create Account</a>
+      {% endif %}
+      <button id="theme-toggle" class="btn icon" type="button" title="Toggle theme">🌓</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <div class="flash">
+          {% for category, m in msgs %}
+            <div class="flash-item {{ category }}">{{ m }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Theme toggle (kept here so it runs after body loads)
+    (function () {
+      const key = 'lt_theme';
+      const body = document.body;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        body.dataset.theme = saved;
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        body.dataset.theme = 'dark';
+      }
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        body.dataset.theme = (body.dataset.theme === 'dark') ? 'light' : 'dark';
+        localStorage.setItem(key, body.dataset.theme);
+      });
+    })();
+  </script>
 </body>
 </html>
