@@ -128,7 +128,8 @@
                value="{{ request.form.get('timekeeper', current_user.name if current_user.is_authenticated else '') }}">
       </label>
 
-      <label class="full">Description
+      <!-- FIX: make Description span both columns in the two-column grid -->
+      <label class="full" style="grid-column: 1 / -1;">Description
         <textarea name="desc" rows="5" placeholder="What did you do?" required>{{ request.form.get('desc','') }}</textarea>
       </label>
     </div>
