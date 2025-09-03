@@ -394,5 +394,20 @@ body.auth-slim .topbar{ box-shadow:none; }
 @media (max-width: 640px) {
   .hours-input { width: 90px; }
 }
+/* Options: compact grids and list editor */
+.grid.two { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+.grid.three { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; }
+@media (max-width:900px){ .grid.two, .grid.three { grid-template-columns: 1fr; } }
+
+.list-editor { margin-top:16px; border:1px solid var(--border, #e5e7eb); border-radius:10px; padding:12px; background:#fafafa; }
+.token-scroll { display:flex; flex-wrap: wrap; gap:8px; max-height:120px; overflow:auto; padding:6px; background:#fff; border:1px dashed #e0e0e0; border-radius:8px; }
+.token { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:9999px; background:#eef2ff; }
+.token .x { border:none; background:transparent; cursor:pointer; font-size:14px; line-height:1; }
+.adder { position:relative; margin-top:10px; }
+.adder-input { width:100%; padding:.6rem .8rem; border:1px solid #ddd; border-radius:8px; background:#fff; }
+.adder-dropdown { position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:5; background:#fff; border:1px solid #ddd; border-radius:8px; max-height:220px; overflow:auto; box-shadow:0 6px 18px rgba(0,0,0,.07); }
+.dd-item { padding:.5rem .75rem; cursor:pointer; }
+.dd-item:hover { background:#f6f8ff; }
+
 
 
