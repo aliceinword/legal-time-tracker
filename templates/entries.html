@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Entries · Legal Time Tracker{% endblock %}
 {% block content %}
+
 <!-- Filters -->
 <form method="get" action="{{ url_for('entries') }}" class="card" id="filters-form">
   <!-- Quick ranges -->
@@ -14,12 +15,15 @@
        href="{{ url_for('entries', mode='90d', q=q) }}">Last 90d</a>
     <a class="btn small {% if mode=='all' %}primary{% endif %}"
        href="{{ url_for('entries', mode='all', q=q) }}">All</a>
-    <span class="muted"></span>
+    <span class="muted">…or set a custom range below.</span>
   </div>
+
   <input type="hidden" name="mode" id="mode" value="{{ mode or '30d' }}">
+
   <div class="grid four">
     <label>Search
-      <input type="text" name="q" value="{{ q or '' }}" placeholder="client, matter, timekeeper, or description (space-separated terms; all must match)">
+      <input type="text" name="q" value="{{ q or '' }}"
+             placeholder="client, matter, timekeeper, or description (space-separated terms; all must match)">
     </label>
     <label>From
       <input type="date" name="from" id="from" value="{{ dfrom or '' }}">
@@ -32,16 +36,17 @@
       <a class="btn" href="{{ url_for('entries') }}">Clear</a>
       <!-- Export by filters (all matching rows) -->
       <a class="btn"
-         href="{{ url_for('export_entries') }}?mode={{ mode|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+         href="{{ url_for('export_entries') }}?mode={{ (mode or '30d')|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
         Export CSV
       </a>
       <a class="btn"
-         href="{{ url_for('export_xlsx') }}?mode={{ mode|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+         href="{{ url_for('export_xlsx') }}?mode={{ (mode or '30d')|urlencode }}{% if dfrom %}&from={{ dfrom|urlencode }}{% endif %}{% if dto %}&to={{ dto|urlencode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
         Export XLSX
       </a>
     </div>
   </div>
 </form>
+
 <!-- Totals + per-client chips -->
 <div class="card row space-between">
   <div><strong>Total hours:</strong> {{ "%.2f"|format(total_hours or 0) }}</div>
@@ -51,12 +56,13 @@
     {% endfor %}
   </div>
 </div>
-<!-- Batch delete + table + inline edit -->
+
+<!-- Bulk actions + table (SINGLE form to avoid nested forms) -->
 <form action="{{ url_for('entries_delete') }}" method="post" class="card" id="bulk-form">
   <div class="row space-between" style="margin-bottom:10px">
     <div class="muted">Select rows and use bulk actions.</div>
     <div class="row gap">
-      <!-- Export only the checked rows (submits the checkboxes in THIS form) -->
+      <!-- Export only the checked rows (posts this form) -->
       <button class="btn small" type="submit"
               formaction="{{ url_for('export_entries') }}"
               formmethod="post"
@@ -69,10 +75,10 @@
               name="export_selected" value="1">
         Export Selected (XLSX)
       </button>
-      <!-- Only this one asks for confirmation -->
       <button class="btn danger small" type="submit" data-confirm="delete">Delete Selected</button>
     </div>
   </div>
+
   <div class="table-wrap">
     <table class="table" id="entries-table">
       <thead>
@@ -90,7 +96,9 @@
       <tbody>
         {% for e in rows %}
         <tr class="entry-row" data-entry-id="{{ e.id }}">
-          <td data-label="Sel"><input type="checkbox" name="id" value="{{ e.id }}" class="row-check"></td>
+          <td data-label="Sel">
+            <input type="checkbox" name="id" value="{{ e.id }}" class="row-check">
+          </td>
           <td data-label="Client">{{ e.client }}</td>
           <td data-label="Matter">{{ e.matter }}</td>
           <td data-label="Date of Work">{{ e.date_of_work }}</td>
@@ -99,19 +107,22 @@
           <td data-label="Description" class="desc">{{ e.desc }}</td>
           <td data-label="Actions" class="actions">
             <button class="btn small js-edit" data-id="{{ e.id }}" type="button">Edit</button>
-            <!-- Per-row delete (separate form is OK here) -->
-            <form action="{{ url_for('entries_delete') }}" method="post" class="inline"
-                  onsubmit="return confirm('Delete this entry?');">
-              <input type="hidden" name="id" value="{{ e.id }}">
-              <button class="btn danger small" type="submit">Delete</button>
-            </form>
+
+            <!-- Per-row delete (uses bulk form; no nested form) -->
+            <button class="btn danger small js-delete-one"
+                    type="submit"
+                    formaction="{{ url_for('entries_delete') }}"
+                    data-id="{{ e.id }}">
+              Delete
+            </button>
           </td>
         </tr>
-        <!-- Inline editor row (hidden; toggled by JS) -->
+
+        <!-- Inline editor row (no <form>; saved via fetch) -->
         <tr class="edit-row" id="edit-{{ e.id }}" style="display:none">
           <td></td>
           <td colspan="7">
-            <form action="{{ url_for('entries_edit') }}" method="post" class="row gap" onsubmit="return saveRow(this)">
+            <div class="row gap inline-edit" data-id="{{ e.id }}">
               <input type="hidden" name="id" value="{{ e.id }}">
               <label style="min-width:160px">Client
                 <input name="client" value="{{ e.client }}">
@@ -131,9 +142,9 @@
               <label class="w100">Description
                 <input name="desc" value="{{ e.desc }}">
               </label>
-              <button class="btn small primary" type="submit">Save</button>
+              <button class="btn small primary js-save" type="button" data-id="{{ e.id }}">Save</button>
               <button class="btn small js-cancel" type="button" data-id="{{ e.id }}">Cancel</button>
-            </form>
+            </div>
           </td>
         </tr>
         {% else %}
@@ -143,23 +154,26 @@
     </table>
   </div>
 </form>
-<!-- Show offline entries only once -->
+
+<!-- Show offline entries only once (optional UI) -->
 <div class="offline-entries" style="display: none;">
   <div class="alert alert-info">
     📱 <span id="offline-count">0</span> entries saved offline
-    <button id="manual-sync" class="btn btn-sm btn-primary ml-2">Sync Now</button>
+    <button id="manual-sync" class="btn btn-sm btn-primary ml-2" type="button">Sync Now</button>
   </div>
 </div>
-<!-- Small JS helpers -->
+
+<!-- JS helpers (no nested forms; per-row delete & edit via JS) -->
 <script>
   // If From/To are touched, force mode='range'
   (function(){
     const mode = document.getElementById('mode');
     const from = document.getElementById('from');
     const to   = document.getElementById('to');
-    if (from) from.addEventListener('input', () => { if(mode) mode.value = 'range'; });
-    if (to)   to.addEventListener('input',   () => { if(mode) mode.value = 'range'; });
+    if (from) from.addEventListener('input', () => { if (mode) mode.value = 'range'; });
+    if (to)   to.addEventListener('input',   () => { if (mode) mode.value = 'range'; });
   })();
+
   // Select all checkboxes
   (function(){
     const all = document.getElementById('check-all');
@@ -167,6 +181,7 @@
     const rows = () => Array.from(document.querySelectorAll('.row-check'));
     all.addEventListener('change', () => rows().forEach(cb => cb.checked = all.checked));
   })();
+
   // Inline edit toggling
   (function(){
     function showRow(id, show){
@@ -185,22 +200,66 @@
         showRow(btn.dataset.id, false);
       });
     });
-    window.saveRow = function(form){ return true; };
   })();
-  // Confirm only when clicking "Delete Selected"
+
+  // Save inline edit via fetch (no nested form)
+  (function(){
+    async function saveInlineEdit(container){
+      const id = container.dataset.id;
+      const fd = new FormData();
+      fd.append('id', id);
+      container.querySelectorAll('input[name]').forEach(inp => {
+        fd.append(inp.name, inp.value);
+      });
+      try {
+        const res = await fetch('{{ url_for("entries_edit") }}', {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('Save failed');
+        // upon success, reload to reflect updates
+        location.reload();
+      } catch (err) {
+        alert('Could not save entry. Please try again.');
+      }
+    }
+    document.querySelectorAll('.js-save').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const container = btn.closest('.inline-edit');
+        if (container) saveInlineEdit(container);
+      });
+    });
+  })();
+
+  // Per-row delete using the bulk form (uncheck everything else, check just this row)
   (function(){
     const bulk = document.getElementById('bulk-form');
     if(!bulk) return;
+
+    // Confirm only when clicking "Delete Selected"
     bulk.addEventListener('submit', function(e){
-      const btn = e.submitter; // modern browsers
+      const btn = e.submitter;
       if (btn && btn.dataset && btn.dataset.confirm === 'delete') {
         if (!confirm('Delete selected entries?')) {
           e.preventDefault();
         }
       }
     });
+
+    document.querySelectorAll('.js-delete-one').forEach(btn=>{
+      btn.addEventListener('click', function(e){
+        // Before default submit, ensure only this row is selected
+        const id = btn.dataset.id;
+        document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+        const rowCb = document.querySelector(`.row-check[value="${id}"]`);
+        if (rowCb) rowCb.checked = true;
+        if (!confirm('Delete this entry?')) {
+          e.preventDefault();
+          document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+        }
+      });
+    });
   })();
 </script>
 {% endblock %}
-
-
