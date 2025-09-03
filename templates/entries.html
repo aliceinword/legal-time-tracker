@@ -14,13 +14,13 @@
        href="{{ url_for('entries', mode='90d', q=q) }}">Last 90d</a>
     <a class="btn small {% if mode=='all' %}primary{% endif %}"
        href="{{ url_for('entries', mode='all', q=q) }}">All</a>
-    <span class="muted">…or set a custom range below.</span>
+    <span class="muted"></span>
   </div>
   <input type="hidden" name="mode" id="mode" value="{{ mode or '30d' }}">
   <div class="grid four">
     <label>Search
       <input type="text" name="q" value="{{ q or '' }}" placeholder="client, matter, timekeeper, or description (space-separated terms; all must match)">
-    </label>␊
+    </label>
     <label>From
       <input type="date" name="from" id="from" value="{{ dfrom or '' }}">
     </label>
@@ -202,4 +202,5 @@
   })();
 </script>
 {% endblock %}
+
 
