@@ -45,6 +45,34 @@
     {% endif %}
   {% endwith %}
 
+  {% if latest %}
+  <!-- Most Recent Entry (moved OUT of <script>) -->
+  <div class="card soft" id="latest-card"
+       data-client="{{ latest.client|e }}"
+       data-matter="{{ latest.matter|e }}"
+       data-timekeeper="{{ (latest.timekeeper or current_user.name)|e }}"
+       data-date="{{ latest.date_of_work.isoformat() }}"
+       data-hours="{{ '%.2f'|format(latest.hours or 0) }}"
+       data-desc="{{ latest.desc|e }}">
+    <div class="row space-between" style="margin-bottom:6px">
+      <h2 style="margin:0">Most Recent Entry</h2>
+      <button type="button" class="btn small" id="latest-fill">Use These Values</button>
+    </div>
+    <div class="grid two">
+      <div>
+        <div><strong>Client:</strong> {{ latest.client }}</div>
+        <div><strong>Matter:</strong> {{ latest.matter }}</div>
+        <div><strong>Date:</strong> {{ latest.date_of_work }}</div>
+      </div>
+      <div>
+        <div><strong>Timekeeper:</strong> {{ latest.timekeeper or current_user.name }}</div>
+        <div><strong>Hours:</strong> {{ '%.2f'|format(latest.hours or 0) }}</div>
+        <div class="muted" style="margin-top:4px"><strong>Description:</strong> {{ latest.desc }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <form method="post" action="{{ url_for('entry') }}" class="card" id="entry-form" novalidate>
     <h1>New Time Entry</h1>
 
@@ -128,7 +156,7 @@
                value="{{ request.form.get('timekeeper', current_user.name if current_user.is_authenticated else '') }}">
       </label>
 
-      <!-- FIX: make Description span both columns in the two-column grid -->
+      <!-- Description spans both columns -->
       <label class="full" style="grid-column: 1 / -1;">Description
         <textarea name="desc" rows="5" placeholder="What did you do?" required>{{ request.form.get('desc','') }}</textarea>
       </label>
@@ -159,32 +187,6 @@
     arr.push(payload);
     offlineSet(arr);
   }
-{% if latest %}
-<div class="card soft" id="latest-card"
-     data-client="{{ latest.client|e }}"
-     data-matter="{{ latest.matter|e }}"
-     data-timekeeper="{{ (latest.timekeeper or current_user.name)|e }}"
-     data-date="{{ latest.date_of_work.isoformat() }}"
-     data-hours="{{ '%.2f'|format(latest.hours or 0) }}"
-     data-desc="{{ latest.desc|e }}">
-  <div class="row space-between" style="margin-bottom:6px">
-    <h2 style="margin:0">Most Recent Entry</h2>
-    <button type="button" class="btn small" id="latest-fill">Use These Values</button>
-  </div>
-  <div class="grid two">
-    <div>
-      <div><strong>Client:</strong> {{ latest.client }}</div>
-      <div><strong>Matter:</strong> {{ latest.matter }}</div>
-      <div><strong>Date:</strong> {{ latest.date_of_work }}</div>
-    </div>
-    <div>
-      <div><strong>Timekeeper:</strong> {{ latest.timekeeper or current_user.name }}</div>
-      <div><strong>Hours:</strong> {{ '%.2f'|format(latest.hours or 0) }}</div>
-      <div class="muted" style="margin-top:4px"><strong>Description:</strong> {{ latest.desc }}</div>
-    </div>
-  </div>
-</div>
-{% endif %}
 
   // -------------------- Stopwatch --------------------
   (function () {
@@ -253,7 +255,6 @@
       };
 
       if (navigator.onLine) {
-        // Submit as a regular form to keep flash/redirect behavior
         const f = document.getElementById('sw-form');
         f.querySelector('#sw-client').value  = payload.client;
         f.querySelector('#sw-matter').value  = payload.matter;
@@ -265,7 +266,6 @@
       } else {
         queueOffline(payload);
         alert('No internet – stopwatch entry saved offline.');
-        // go to list so user sees banner
         location.href = "{{ url_for('entries') }}";
       }
     });
@@ -333,23 +333,20 @@
     const form = document.getElementById('entry-form');
     if (!form) return;
     form.addEventListener('submit', function(ev){
-      // trim
       for (const el of this.querySelectorAll('input, textarea')) {
         if (el.name && typeof el.value === 'string') el.value = el.value.trim();
       }
-      if (navigator.onLine) return; // let it submit normally
+      if (navigator.onLine) return;
 
       ev.preventDefault();
       const fd = new FormData(this);
       const payload = {};
       fd.forEach((v,k) => { payload[k] = String(v); });
 
-      // Map selects to underlying text inputs if needed
       if (payload.client_select && !payload.client) payload.client = payload.client_select;
       if (payload.matter_select && !payload.matter) payload.matter = payload.matter_select;
       if (payload.rate_select   && !payload.rate)   payload.rate   = payload.rate_select;
 
-      // Normalize basics
       payload.client = payload.client || '(Unspecified)';
       payload.matter = payload.matter || '(Unspecified)';
       payload.date_of_work = payload.date_of_work || (new Date()).toISOString().slice(0,10);
@@ -361,6 +358,7 @@
     });
   })();
 </script>
+
 <script>
   // --- Prefill New Entry form from the "Most Recent Entry" card ---
   (function(){
@@ -402,4 +400,3 @@
   })();
 </script>
 {% endblock %}
-
