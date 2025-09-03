@@ -426,6 +426,44 @@ body.auth-slim .topbar{ box-shadow:none; }
   font-size: 0.85rem;
   line-height: 1.1;
 }
+/* Keep Hours controls inside the card and responsive */
+#entry-form .hours-group{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;            /* <-- allow wrapping */
+  align-items: center;
+}
+
+/* Let the number input shrink nicely */
+#entry-form .hours-group > input[type="number"]{
+  flex: 1 1 160px;            /* grow, but can shrink to ~160px */
+  min-width: 0;               /* prevent overflow in flex containers */
+}
+
+/* Button group can wrap and drop to the next line */
+#entry-form .hours-group .quick-add{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+/* Make the small buttons truly small and non-wrapping text */
+#entry-form .hours-group .quick-add .btn.small{
+  white-space: nowrap;
+  padding: 0.28rem 0.5rem;
+  line-height: 1.1;
+  font-size: 0.85rem;
+}
+
+/* On narrow screens, place buttons under the input */
+@media (max-width: 700px){
+  #entry-form .hours-group .quick-add{
+    width: 100%;
+    margin-top: 6px;
+  }
+}
+
 
 
 
